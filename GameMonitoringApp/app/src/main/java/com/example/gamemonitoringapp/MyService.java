@@ -10,8 +10,10 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.VectorDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -88,9 +90,9 @@ public class MyService extends Service {
             @Override
             public void run() {
                 insertDataIntoFirestore();
-                handler.postDelayed(this, 60000); // 1 minute delay
+                handler.postDelayed(this, 60000); // 1 minute delay 60000
             }
-        }, 30000); // Initial delay of 30 seconds
+        }, 5000); // Initial delay of 30 seconds
     }
 
     @Override
@@ -211,32 +213,53 @@ public class MyService extends Service {
             String totalTimeFormatted = formatTime(totalTimeInForegroundMillis);
 
             String packageName;
-            String ApplicationName;
+            String applicationName;
             try {
                 ApplicationInfo appInfo = packageManager.getApplicationInfo(appName, 0);
                 packageName = appInfo.packageName;
-                ApplicationName = getAppName(packageName);
+                applicationName = getAppName(packageName);
                 String base64Logo = getBase64AppLogo(packageName);
 
-                Map<String, Object> usageData = new HashMap<>();
-                usageData.put("appName", ApplicationName);
-                usageData.put("totalTimeInForeground", totalTimeFormatted);
-                usageData.put("date", currentDate);
-                usageData.put("userId", currentUserId);
-                usageData.put("userIdDate", currentUserId + "_" + currentDate);
-                usageData.put("appLogo", base64Logo);
+                String documentName = currentUserId + "_" + applicationName + "_" + currentDate;
 
-                String documentName = currentUserId + "_" + ApplicationName + "_" + currentDate;
+                // Query Firestore to check if the document already exists
+                dbRef.child(documentName).get().addOnCompleteListener(task -> {
+                    if (task.isSuccessful() && task.getResult().exists()) {
+                        // Document already exists, update only the other details
+                        Map<String, Object> updateData = new HashMap<>();
+                        updateData.put("totalTimeInForeground", totalTimeFormatted);
+                        updateData.put("date", currentDate);
+                        updateData.put("userId", currentUserId);
+                        updateData.put("userIdDate", currentUserId + "_" + currentDate);
 
-                dbRef.child(documentName).setValue(usageData)
-                        .addOnSuccessListener(aVoid -> {
-                            Log.d("MyService", "Data inserted into Firestore for app: " + ApplicationName);
-                        })
-                        .addOnFailureListener(e -> {
-                            Log.e("MyService", "Failed to insert data into Firestore for app: " + ApplicationName, e);
-                        });
+                        dbRef.child(documentName).updateChildren(updateData)
+                                .addOnSuccessListener(aVoid -> {
+                                    Log.d("MyService", "Data updated in Firestore for app: " + applicationName);
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e("MyService", "Failed to update data in Firestore for app: " + applicationName, e);
+                                });
+                    } else {
+                        // Document does not exist, proceed with insertion including the logo
+                        Map<String, Object> usageData = new HashMap<>();
+                        usageData.put("appName", applicationName);
+                        usageData.put("totalTimeInForeground", totalTimeFormatted);
+                        usageData.put("date", currentDate);
+                        usageData.put("userId", currentUserId);
+                        usageData.put("userIdDate", currentUserId + "_" + currentDate);
+                        usageData.put("appLogo", base64Logo);
 
-                usageDetails.append(ApplicationName).append(": ").append(totalTimeFormatted).append(", ");
+                        dbRef.child(documentName).setValue(usageData)
+                                .addOnSuccessListener(aVoid -> {
+                                    Log.d("MyService", "Data inserted into Firestore for app: " + applicationName);
+                                })
+                                .addOnFailureListener(e -> {
+                                    Log.e("MyService", "Failed to insert data into Firestore for app: " + applicationName, e);
+                                });
+                    }
+                });
+
+                usageDetails.append(applicationName).append(": ").append(totalTimeFormatted).append(", ");
 
             } catch (PackageManager.NameNotFoundException e) {
                 Log.e("MyService", "Failed to get package name for app: " + appName, e);
@@ -251,6 +274,81 @@ public class MyService extends Service {
 
         checkAndSendSMS(currentUserId, currentDate);
     }
+
+
+//    private void insertDataIntoFirestore() {
+//        long startTime = getTodayStartTimeInMillis();
+//        long endTime = System.currentTimeMillis();
+//        FirebaseUser currentUser = mAuth.getCurrentUser();
+//        String currentDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+//        String currentUserId = currentUser != null ? currentUser.getUid() : "unknown_user";
+//
+//        DatabaseReference dbRef = FirebaseDatabase.getInstance().getReference().child("usage_GameStatsInfo");
+//        List<UsageStats> stats = UsageStatsUtil.getUsageStats(this, startTime, endTime);
+//
+//        Map<String, Long> appUsageDurations = new HashMap<>();
+//        for (UsageStats usageStats : stats) {
+//            try {
+//                ApplicationInfo appInfo = packageManager.getApplicationInfo(usageStats.getPackageName(), 0);
+//                if (isGameApp(appInfo)) {
+//                    String appName = usageStats.getPackageName();
+//                    long totalTimeInForegroundMillis = usageStats.getTotalTimeInForeground();
+//
+//                    appUsageDurations.put(appName, appUsageDurations.getOrDefault(appName, 0L) + totalTimeInForegroundMillis);
+//                }
+//            } catch (PackageManager.NameNotFoundException e) {
+//                e.printStackTrace();
+//            }
+//        }
+//
+//        StringBuilder usageDetails = new StringBuilder();
+//
+//        for (Map.Entry<String, Long> entry : appUsageDurations.entrySet()) {
+//            String appName = entry.getKey();
+//            long totalTimeInForegroundMillis = entry.getValue();
+//            String totalTimeFormatted = formatTime(totalTimeInForegroundMillis);
+//
+//            String packageName;
+//            String ApplicationName;
+//            try {
+//                ApplicationInfo appInfo = packageManager.getApplicationInfo(appName, 0);
+//                packageName = appInfo.packageName;
+//                ApplicationName = getAppName(packageName);
+//                String base64Logo = getBase64AppLogo(packageName);
+//
+//                Map<String, Object> usageData = new HashMap<>();
+//                usageData.put("appName", ApplicationName);
+//                usageData.put("totalTimeInForeground", totalTimeFormatted);
+//                usageData.put("date", currentDate);
+//                usageData.put("userId", currentUserId);
+//                usageData.put("userIdDate", currentUserId + "_" + currentDate);
+//                usageData.put("appLogo", base64Logo);
+//
+//                String documentName = currentUserId + "_" + ApplicationName + "_" + currentDate;
+//
+//                dbRef.child(documentName).setValue(usageData)
+//                        .addOnSuccessListener(aVoid -> {
+//                            Log.d("MyService", "Data inserted into Firestore for app: " + ApplicationName);
+//                        })
+//                        .addOnFailureListener(e -> {
+//                            Log.e("MyService", "Failed to insert data into Firestore for app: " + ApplicationName, e);
+//                        });
+//
+//                usageDetails.append(ApplicationName).append(": ").append(totalTimeFormatted).append(", ");
+//
+//            } catch (PackageManager.NameNotFoundException e) {
+//                Log.e("MyService", "Failed to get package name for app: " + appName, e);
+//            }
+//        }
+//
+//        Log.d("MyService", "Usage Details: " + usageDetails.toString());
+//
+//        if (appUsageDurations.isEmpty()) {
+//            Log.d("MyService", "No app usage data to insert into Firestore.");
+//        }
+//
+//        checkAndSendSMS(currentUserId, currentDate);
+//    }
 
     private boolean isMidnight() {
         Calendar calendar = Calendar.getInstance();
@@ -294,7 +392,7 @@ public class MyService extends Service {
 
                                                 // Send the SMS using the itextmo service
                                                 //Toast.makeText(MyService.this, "sent sent sent", Toast.LENGTH_SHORT).show();
-                                              SentSMSitextmo(CPNumber, message);
+                                                SentSMSitextmo(CPNumber, message);
                                             }
                                         }
                                     });
@@ -372,68 +470,140 @@ public class MyService extends Service {
         }
     }
 
+    //    private String getBase64AppLogo(String packageName) {
+//        try {
+//            ApplicationInfo appInfo = packageManager.getApplicationInfo(packageName, 0);
+//            Drawable appIcon = packageManager.getApplicationIcon(appInfo);
+//            Bitmap bitmap;
+//
+//            // Handle different drawable types
+//            if (appIcon instanceof BitmapDrawable) {
+//                bitmap = ((BitmapDrawable) appIcon).getBitmap();
+//            } else {
+//                // Create a Bitmap from a VectorDrawable or other drawable types
+//                bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
+//                Canvas canvas = new Canvas(bitmap);
+//                appIcon.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+//                appIcon.draw(canvas);
+//            }
+//
+//            // Resize the bitmap to 32x32 pixels for minimal size
+//            Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, 32, 32, false);
+//            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//            resizedBitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+//            byte[] byteArray = outputStream.toByteArray();
+//            return Base64.encodeToString(byteArray, Base64.DEFAULT);
+//
+//        } catch (PackageManager.NameNotFoundException e) {
+//            Log.e("MyService", "Package not found: " + packageName, e);
+//        } catch (Exception e) {
+//            Log.e("MyService", "Error retrieving app logo for package: " + packageName, e);
+//        }
+//        return ""; // Return empty if any failure occurs
+//    }
     private String getBase64AppLogo(String packageName) {
         try {
             ApplicationInfo appInfo = packageManager.getApplicationInfo(packageName, 0);
             Drawable appIcon = packageManager.getApplicationIcon(appInfo);
+            Bitmap bitmap;
+
+            // Handle different drawable types
             if (appIcon instanceof BitmapDrawable) {
-                Bitmap bitmap = ((BitmapDrawable) appIcon).getBitmap();
-                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
-                byte[] byteArray = outputStream.toByteArray();
-                return Base64.encodeToString(byteArray, Base64.DEFAULT);
+                bitmap = ((BitmapDrawable) appIcon).getBitmap();
+            } else {
+                bitmap = Bitmap.createBitmap(100, 100, Bitmap.Config.ARGB_8888);
+                Canvas canvas = new Canvas(bitmap);
+                appIcon.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+                appIcon.draw(canvas);
             }
+
+            // Resize the bitmap to 16x16 pixels for minimal size
+            Bitmap resizedBitmap = Bitmap.createScaledBitmap(bitmap, 16, 16, false);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+
+            // Use JPEG format with lower quality for better compression
+            resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 50, outputStream); // Adjust quality as needed
+            byte[] byteArray = outputStream.toByteArray();
+
+            // Log sizes
+            Log.d("MyService", "Original size: " + bitmap.getByteCount());
+            Log.d("MyService", "Base64 size: " + byteArray.length);
+
+            return Base64.encodeToString(byteArray, Base64.DEFAULT);
+
         } catch (PackageManager.NameNotFoundException e) {
-            e.printStackTrace();
+            Log.e("MyService", "Package not found: " + packageName, e);
+        } catch (Exception e) {
+            Log.e("MyService", "Error retrieving app logo for package: " + packageName, e);
         }
-        return "";
-        }
-
-        private void fetchTotalApplicationTime(OnTotalTimeFetchedListener listener) {
-            FirebaseDatabase database = FirebaseDatabase.getInstance();
-            DatabaseReference dbRef = database.getReference("usage_GameStatsInfo");
-            String currentDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
-
-            // Get current user's UID from Firebase Authentication
-            FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
-            String uid = currentUser != null ? currentUser.getUid() : null;
-
-            Query query = dbRef.orderByChild("userIdDate").equalTo(uid + "_" + currentDate);
-
-            query.addListenerForSingleValueEvent(new ValueEventListener() {
-                @Override
-                public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
-                    long totalApplicationTime = 0;  // Accumulator for total time in foreground
-                    StringBuilder resultBuilder = new StringBuilder();
-                    for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
-                        String totalTimeInForeground = snapshot.child("totalTimeInForeground").getValue(String.class);
-                        String appName = snapshot.child("appName").getValue(String.class);
+        return ""; // Return empty if any failure occurs
+    }
 
 
-                        if (totalTimeInForeground != null) {
-                            totalApplicationTime += parseTimeToSeconds(totalTimeInForeground);
-                        }
-                        resultBuilder.append(appName)
-                                .append(": ")
-                                .append(totalTimeInForeground)
-                                .append("\n");
+
+
+//    private String getBase64AppLogo(String packageName) {
+//        try {
+//            ApplicationInfo appInfo = packageManager.getApplicationInfo(packageName, 0);
+//            Drawable appIcon = packageManager.getApplicationIcon(appInfo);
+//            if (appIcon instanceof BitmapDrawable) {
+//                Bitmap bitmap = ((BitmapDrawable) appIcon).getBitmap();
+//                ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+//                bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream);
+//                byte[] byteArray = outputStream.toByteArray();
+//                return Base64.encodeToString(byteArray, Base64.DEFAULT);
+//            }
+//        } catch (PackageManager.NameNotFoundException e) {
+//            e.printStackTrace();
+//        }
+//        return "";
+//        }
+
+    private void fetchTotalApplicationTime(OnTotalTimeFetchedListener listener) {
+        FirebaseDatabase database = FirebaseDatabase.getInstance();
+        DatabaseReference dbRef = database.getReference("usage_GameStatsInfo");
+        String currentDate = new SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(new Date());
+
+        // Get current user's UID from Firebase Authentication
+        FirebaseUser currentUser = FirebaseAuth.getInstance().getCurrentUser();
+        String uid = currentUser != null ? currentUser.getUid() : null;
+
+        Query query = dbRef.orderByChild("userIdDate").equalTo(uid + "_" + currentDate);
+
+        query.addListenerForSingleValueEvent(new ValueEventListener() {
+            @Override
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                long totalApplicationTime = 0;  // Accumulator for total time in foreground
+                StringBuilder resultBuilder = new StringBuilder();
+                for (DataSnapshot snapshot : dataSnapshot.getChildren()) {
+                    String totalTimeInForeground = snapshot.child("totalTimeInForeground").getValue(String.class);
+                    String appName = snapshot.child("appName").getValue(String.class);
+
+
+                    if (totalTimeInForeground != null) {
+                        totalApplicationTime += parseTimeToSeconds(totalTimeInForeground);
                     }
-
-                    // Pass the result to the listener
-                    if (listener != null) {
-                        listener.onTotalTimeFetched(totalApplicationTime, resultBuilder.toString());
-                    }
+                    resultBuilder.append(appName)
+                            .append(": ")
+                            .append(totalTimeInForeground)
+                            .append("\n");
                 }
 
-                @Override
-                public void onCancelled(@NonNull DatabaseError databaseError) {
-                    // Pass the error message to the listener
-                    if (listener != null) {
-                        listener.onFailure(databaseError.getMessage());
-                    }
+                // Pass the result to the listener
+                if (listener != null) {
+                    listener.onTotalTimeFetched(totalApplicationTime, resultBuilder.toString());
                 }
-            });
-        }
+            }
+
+            @Override
+            public void onCancelled(@NonNull DatabaseError databaseError) {
+                // Pass the error message to the listener
+                if (listener != null) {
+                    listener.onFailure(databaseError.getMessage());
+                }
+            }
+        });
+    }
 
     private long parseTimeToSeconds(String timeString) {
         String[] timeParts = timeString.split(":");
