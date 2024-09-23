@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "1097874151377",
+    "firebase_url": "https://gamesense-5575d-default-rtdb.firebaseio.com",
+    "project_id": "gamesense-5575d",
+    "storage_bucket": "gamesense-5575d.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097874151377:android:85c27b014201a0d40d32f0",
+        "android_client_info": {
+          "package_name": "com.example.gamemonitoringapp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBljeYfI7S9aXX2YbRVFJaBYFAvZsltSKI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
